@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with AI - Simple Chat Bot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="chat-container">
+        <aside class="sidebar">
+            <div class="sidebar-actions">
+                <button class="new-chat-btn" onclick="startNewChat()">
+                    <i class="fas fa-plus"></i>
+                    New Chat
+                </button>
+                <label class="switch">
+                    <input type="checkbox" id="theme-toggle">
+                    <span class="slider"></span>
+                    <span class="toggle-label">Dark Mode</span>
+                </label>
+            </div>
+            
+            <div class="user-info">
+                <div class="user-avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="user-details">
+                    <h3>{{ current_user.username }}</h3>
+                    <p>{{ current_user.email }}</p>
+                </div>
+            </div>
+
+            <div class="chat-history" id="chat-history">
+                <h3>Chat History</h3>
+                <div id="history-list">
+                    {% for message in messages %}
+                    <div class="history-item" onclick="loadChat({{ message.id }})">
+                        <span class="history-message">{{ message.content[:30] }}{% if message.content|length > 30 %}...{% endif %}</span>
+                        <span class="history-time">{{ message.timestamp.strftime('%I:%M %p') }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <button class="clear-history-btn" onclick="clearHistory()">
+                    <i class="fas fa-trash"></i>
+                    Clear History
+                </button>
+            </div>
+
+            <div class="sidebar-footer">
+                <a href="{{ url_for('logout') }}" class="logout-btn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
+                </a>
+            </div>
+        </aside>
+
+        <main class="chat-area">
+            <div class="chat-header">
+                <h2 class="animated-title">
+                    <span>S</span><span>I</span><span>M</span><span>P</span><span>L</span><span>E</span>
+                    <span>&nbsp;</span>
+                    <span>C</span><span>H</span><span>A</span><span>T</span>
+                    <span>&nbsp;</span>
+                    <span>B</span><span>O</span><span>T</span>
+                </h2>
+            </div>
+
+            <div class="chat-messages" id="chat-messages">
+                <div class="welcome-message">
+                    <h3>Welcome to Simple Chat Bot! 👋</h3>
+                </div>
+                {% for message in messages %}
+                    <div class="message sent">{{ message.content }}</div>
+                    <div class="message received">{{ message.response }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="chat-input">
+                <form class="input-container" id="chat-form">
+                    <input type="text" id="user-input" placeholder="Type your message here..." autocomplete="off">
+                    <button type="submit" class="send-btn">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('theme-toggle');
+        const body = document.documentElement;
+
+        // Check for saved theme preference
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme) {
+            body.setAttribute('data-theme', savedTheme);
+            themeToggle.checked = savedTheme === 'dark';
+        }
+
+        themeToggle.addEventListener('change', () => {
+            if (themeToggle.checked) {
+                body.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                body.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+            }
+        });
+
+        // Chat functionality
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const chatMessages = document.getElementById('chat-messages');
+
+        function startNewChat() {
+            // Clear chat messages except welcome message
+            const welcomeMessage = chatMessages.querySelector('.welcome-message');
+            chatMessages.innerHTML = '';
+            if (welcomeMessage) {
+                chatMessages.appendChild(welcomeMessage);
+            }
+        }
+
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function appendMessage(content, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = content;
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            appendMessage(message, 'sent');
+            userInput.value = '';
+
+            try {
+                const response = await fetch('/send_message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: message })
+                });
+
+                const data = await response.json();
+                appendMessage(data.response, 'received');
+                
+                // Update chat history
+                const historyList = document.getElementById('history-list');
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                historyItem.onclick = () => loadChat(data.message_id);
+                
+                const messageSpan = document.createElement('span');
+                messageSpan.className = 'history-message';
+                messageSpan.textContent = message.length > 30 ? message.substring(0, 30) + '...' : message;
+                
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'history-time';
+                timeSpan.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                historyItem.appendChild(messageSpan);
+                historyItem.appendChild(timeSpan);
+                historyList.insertBefore(historyItem, historyList.firstChild);
+            } catch (error) {
+                console.error('Error:', error);
+                appendMessage('Sorry, there was an error processing your message.', 'received');
+            }
+        });
+
+        // Chat history functionality
+        function loadChat(messageId) {
+            fetch(`/load_chat/${messageId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        chatMessages.innerHTML = ''; // Clear current messages
+                        data.messages.forEach(msg => {
+                            appendMessage(msg.content, 'sent');
+                            appendMessage(msg.response, 'received');
+                        });
+                        scrollToBottom();
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function clearHistory() {
+            if (confirm('Are you sure you want to clear your chat history?')) {
+                fetch('/clear_history', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        document.getElementById('history-list').innerHTML = '';
+                        chatMessages.innerHTML = '';
+                        // Show welcome message again
+                        const welcomeMessage = document.querySelector('.welcome-message');
+                        if (welcomeMessage) {
+                            chatMessages.appendChild(welcomeMessage.cloneNode(true));
+                        }
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            }
+        }
+
+        // Initial scroll to bottom
+        scrollToBottom();
+    </script>
+</body>
+</html>
